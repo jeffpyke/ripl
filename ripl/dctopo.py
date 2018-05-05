@@ -262,23 +262,30 @@ class JellyFishTopo(StructuredTopo):
        super(JellyFishTopo, self).__init__(node_specs, edge_specs)
        self.id_gen = JFNodeID
        hosts = []
-       switches = []
+       self.myswitches = []
+       self.switch_hosts = {}
        for s in range(N):
            edge_id = self.id_gen(s, 1).name_str()
            edge_opts = self.def_nopts(self.LAYER_EDGE, edge_id)
-           switches.append(self.addSwitch(edge_id, **edge_opts))
-
-       for h in range(2, S+2): 
+           self.addSwitch(edge_id, **edge_opts)
+           self.myswitches.append(edge_id)
+      
+       self.hosts_to_switches = {}
+       for h in range(S): 
            conn_switch = random.randint(0,N-1)
-           host_id = self.id_gen(conn_switch, h).name_str()
+           n_hosts = self.switch_hosts.get(conn_switch, 0)
+           host_id = self.id_gen(conn_switch, 2 + n_hosts).name_str()
            host_opts = self.def_nopts(self.LAYER_HOST, host_id)
            host = self.addHost(host_id, **host_opts)
            hosts.append(host)
-           self.addLink(host, switches[conn_switch])
+           self.addLink(host_id, self.myswitches[conn_switch])
+           self.switch_hosts[conn_switch] = self.switch_hosts.get(conn_switch, 0) + 1
+           self.hosts_to_switches[host_id] = self.myswitches[conn_switch]
  
        rrg = nx.random_regular_graph(r, N, 100) 
+       self.rrg = rrg
        for e in rrg.edges():
-           self.addLink(switches[e[0]], switches[e[1]]) 
+           self.addLink(self.myswitches[e[0]], self.myswitches[e[1]]) 
 
 
 

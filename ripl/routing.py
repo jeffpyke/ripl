@@ -7,11 +7,12 @@ Routing engine base class.
 '''
 from copy import copy
 from random import choice
-
+import networkx as nx
+import random
 import logging
 lg = logging.getLogger('ripl.routing')
 
-DEBUG = False
+DEBUG = True
 
 lg.setLevel(logging.WARNING)
 if DEBUG:
@@ -43,6 +44,31 @@ class Routing(object):
         '''
         raise NotImplementedError
 
+
+class JellyFishRouting(Routing):
+    def get_random_shortest_path(self, G, source, target):
+        paths = list(nx.all_shortest_paths(G,source,target))
+        n = random.randint(0,len(paths)-1)
+        return paths[n]
+
+    def get_route(self, src, dst, pkt):
+        if src == dst:
+            return [src]
+        switch = src
+        if self.topo.layer(src) == 1:
+            switch = self.topo.host_to_switch[src]
+        dest_switch = dst
+        if self.topo.layer(dst) == 1:
+            dest_switch = self.topo.host_to_switch[dst]
+        src_id = self.topo.myswitches.index(switch)
+        dst_id = self.topo.myswitches.index(dest_switch)
+        path = self.get_random_shortest_path(self.topo.rrg, src_id, dst_id)
+        paths = [self.topo.myswitches[p] for p in path]
+        if self.topo.layer(src) == 1:
+            paths = [src] + paths
+        if self.topo.layer(dst) == 1:
+            paths = paths + [dst]
+        return paths
 
 class StructuredRouting(Routing):
     '''Route flow through a StructuredTopo and return one path.
