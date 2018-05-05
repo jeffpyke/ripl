@@ -12,10 +12,10 @@ enumerate up, down, and layer edges.
 '''
 
 from mininet.topo import Topo
-
+import networkx as nx
+import random
 
 PORT_BASE = 1  # starting index for OpenFlow switch ports
-
 
 class NodeID(object):
     '''Topo node identifier.'''
@@ -51,7 +51,6 @@ class NodeID(object):
         mid = (self.dpid & 0xff00) >> 8
         lo = self.dpid & 0xff
         return "10.%i.%i.%i" % (hi, mid, lo)
-
 
 class StructuredNodeSpec(object):
     '''Layer-specific vertex metadata for a StructuredTopo graph.'''
@@ -216,6 +215,71 @@ class StructuredTopo(Topo):
 #            plt.savefig(filename)
 #        else:
 #            plt.show()
+class JFNodeID(NodeID):
+
+    def __init__(self, sw = 0, host = 0, dpid = None, name=None):
+        if dpid:
+            self.sw = (dpid & 0xff00) >> 8
+            self.host = (dpid & 0xff)
+            self.dpid = dpid
+        elif name:
+            sw, host = [int(s) for s in name.split('_')]
+            self.sw = sw
+            self.host = host
+            self.dpid = (sw << 8) + host
+        else:
+            self.sw = sw
+            self.host = host
+            self.dpid = (sw << 8) + host
+    def __str__(self):
+        return "(%i, %i, %i)" % (self.sw, self.host)
+    def name_str(self):
+        return "%i_%i" % (self.sw, self.host)
+    def mac_str(self):
+        return "00:00:00:00:%02x:%02x" % (self.sw, self.host)
+    def ip_str(self):
+        return "10.0.%i.%i" % (self.sw, self.host)
+
+
+class JellyFishTopo(StructuredTopo):
+    LAYER_EDGE = 0 
+    LAYER_HOST = 1
+    def def_nopts(self, layer, name):
+        d = {'layer': layer}
+        id = self.id_gen(name=name)
+        if layer == self.LAYER_HOST:
+            d.update({'ip': id.ip_str()})
+            d.update({'mac': id.mac_str()})
+        d.update({'dpid': "%016x" % id.dpid})
+        return d
+
+    def __init__(self, S=20, N=5, r=2):
+       speed=1.0
+       edge = StructuredNodeSpec(0, r, speed, speed, type_str='edge')
+       host = StructuredNodeSpec(1, 0, speed, None, type_str='host')
+       node_specs = [edge, host]
+       edge_specs = [StructuredEdgeSpec(speed)]
+       super(JellyFishTopo, self).__init__(node_specs, edge_specs)
+       self.id_gen = JFNodeID
+       hosts = []
+       switches = []
+       for s in range(N):
+           edge_id = self.id_gen(s, 1).name_str()
+           edge_opts = self.def_nopts(self.LAYER_EDGE, edge_id)
+           switches.append(self.addSwitch(edge_id, **edge_opts))
+
+       for h in range(2, S+2): 
+           conn_switch = random.randint(0,N-1)
+           host_id = self.id_gen(conn_switch, h).name_str()
+           host_opts = self.def_nopts(self.LAYER_HOST, host_id)
+           host = self.addHost(host_id, **host_opts)
+           hosts.append(host)
+           self.addLink(host, switches[conn_switch])
+ 
+       rrg = nx.random_regular_graph(r, N, 100) 
+       for e in rrg.edges():
+           self.addLink(switches[e[0]], switches[e[1]]) 
+
 
 
 class FatTreeTopo(StructuredTopo):
